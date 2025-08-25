@@ -30,7 +30,7 @@ var (
 
 	// GroupName is the Kubernetes group name that will be forwarded to this
 	// extension-apiserver.
-	GroupName = "external-dns.acme.cert-manager.io"
+	GroupName = "cert-manager-webhook.lion7.dev"
 
 	// RequestTimeout is the timeout for each request
 	RequestTimeout = time.Second * 5

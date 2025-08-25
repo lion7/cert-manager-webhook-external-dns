@@ -17,11 +17,11 @@ The default configuration of ExternalDNS needs altering for this integration to 
 If you are deploying with the [official Helm chart](https://artifacthub.io/packages/helm/external-dns/external-dns) you can accomplish this by including this in your values file:
 
 ```yaml
-extraArgs: 
-  - --managed-record-types=A      # ┐
-  - --managed-record-types=AAAA   # ├ Default values
-  - --managed-record-types=CNAME  # ┘
-  - --managed-record-types=TXT    # ─ New value
+managedRecordTypes: 
+  - A      # ┐
+  - AAAA   # ├ Default values
+  - CNAME  # ┘
+  - TXT    # ─ New value
 
 sources:
   - service # ┬ Default values
@@ -35,7 +35,72 @@ Any supported version of cert-manager supports DNS webhooks, for documentation o
 
 ## Installing
 
-TODO
+### Using Helm
+
+The webhook can be installed using Helm:
+
+```bash
+# Add the repository
+helm repo add cert-manager-webhook-external-dns oci://ghcr.io/lion7/cert-manager-webhook-external-dns
+
+# Install the webhook
+helm install cert-manager-webhook-external-dns \
+  cert-manager-webhook-external-dns/cert-manager-webhook-external-dns \
+  --namespace cert-manager \
+  --create-namespace
+```
+
+### Using OCI Registry
+
+You can also install directly from the OCI registry:
+
+```bash
+helm install cert-manager-webhook-external-dns \
+  oci://ghcr.io/lion7/cert-manager-webhook-external-dns \
+  --namespace cert-manager \
+  --create-namespace
+```
+
+### Configuration
+
+The default values should work for most installations. You can customize the installation by creating a values file:
+
+```yaml
+# values.yaml
+image:
+  repository: ghcr.io/lion7/cert-manager-webhook-external-dns
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Webhook configuration
+webhook:
+  port: 8443
+
+# cert-manager configuration
+certManager:
+  namespace: cert-manager
+  serviceAccountName: cert-manager
+```
+
+Then install with:
+
+```bash
+helm install cert-manager-webhook-external-dns \
+  oci://ghcr.io/lion7/cert-manager-webhook-external-dns \
+  --namespace cert-manager \
+  --create-namespace \
+  -f values.yaml
+```
 
 ## Usage
 
@@ -52,7 +117,7 @@ spec:
     solvers:
     - dns01:
         webhook:
-          groupName: external-dns.acme.cert-manager.io
+          groupName: cert-manager-webhook.lion7.dev
           solverName: external-dns
 ```
 

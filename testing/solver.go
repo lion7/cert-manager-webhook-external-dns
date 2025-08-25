@@ -69,14 +69,14 @@ func (s *Solver) Initialize(config *rest.Config, stopCh <-chan struct{}) error {
 	}
 
 	// Create source for new config
-	source, err := source.NewCRDSource(restClient, "", "DNSEndpoint", "", labels.Everything(), runtimeScheme, false)
+	crdSource, err := source.NewCRDSource(restClient, "", "DNSEndpoint", "", labels.Everything(), runtimeScheme, false)
 	if err != nil {
 		return err
 	}
 
 	// Setup the external-dns controller
 	externalDNS := controller.Controller{
-		Source:             source,
+		Source:             crdSource,
 		Registry:           s.Registry,
 		Policy:             &plan.SyncPolicy{},
 		DomainFilter:       s.Registry.domains,

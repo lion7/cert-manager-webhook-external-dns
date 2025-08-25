@@ -3,6 +3,7 @@ package testing
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"testing"
@@ -28,6 +29,8 @@ func NewTestRegistry(t *testing.T, addr string, domains ...string) *Registry {
 		records: make(map[endpoint.EndpointKey]*endpoint.Endpoint),
 	}
 
+	log.Printf("[TEST REGISTRY] Starting DNS server on %s for domains: %v", addr, domains)
+
 	server := &dns.Server{
 		Addr:    addr,
 		Net:     "udp",
@@ -39,6 +42,7 @@ func NewTestRegistry(t *testing.T, addr string, domains ...string) *Registry {
 	}()
 
 	t.Cleanup(func() {
+		log.Printf("[TEST REGISTRY] Shutting down DNS server")
 		_ = server.Shutdown()
 	})
 
@@ -54,6 +58,11 @@ func (r *Registry) Records(ctx context.Context) ([]*endpoint.Endpoint, error) {
 		records = append(records, record.DeepCopy())
 	}
 
+	log.Printf("[TEST REGISTRY] Records() returning %d records", len(records))
+	for _, record := range records {
+		log.Printf("[TEST REGISTRY]   - %s %s %v", record.DNSName, record.RecordType, record.Targets)
+	}
+
 	return records, nil
 }
 
@@ -61,15 +70,21 @@ func (r *Registry) ApplyChanges(ctx context.Context, changes *plan.Changes) erro
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	log.Printf("[TEST REGISTRY] ApplyChanges() - Create: %d, Update: %d, Delete: %d",
+		len(changes.Create), len(changes.UpdateNew), len(changes.Delete))
+
 	for _, change := range changes.Create {
+		log.Printf("[TEST REGISTRY]   CREATE: %s %s %v", change.DNSName, change.RecordType, change.Targets)
 		r.records[change.Key()] = change.DeepCopy()
 	}
 
 	for _, change := range changes.UpdateNew {
+		log.Printf("[TEST REGISTRY]   UPDATE: %s %s %v", change.DNSName, change.RecordType, change.Targets)
 		r.records[change.Key()] = change.DeepCopy()
 	}
 
 	for _, change := range changes.Delete {
+		log.Printf("[TEST REGISTRY]   DELETE: %s %s %v", change.DNSName, change.RecordType, change.Targets)
 		delete(r.records, change.Key())
 	}
 
@@ -103,9 +118,12 @@ func (r *Registry) handleDNSRequest(w dns.ResponseWriter, req *dns.Msg) {
 }
 
 func (r *Registry) addDNSAnswer(q dns.Question, msg *dns.Msg, req *dns.Msg) error {
+	log.Printf("[TEST REGISTRY] DNS Query: %s %s", q.Name, dns.TypeToString[q.Qtype])
+
 	switch q.Qtype {
 	// Always return loopback for any A query
 	case dns.TypeA:
+		log.Printf("[TEST REGISTRY]   A record query for %s, returning 127.0.0.1", q.Name)
 		rr, err := dns.NewRR(fmt.Sprintf("%s 5 IN A 127.0.0.1", q.Name))
 		if err != nil {
 			return err
@@ -121,8 +139,12 @@ func (r *Registry) addDNSAnswer(q dns.Question, msg *dns.Msg, req *dns.Msg) erro
 		}
 
 		found := false
+		queryName := strings.TrimSuffix(q.Name, ".")
+		log.Printf("[TEST REGISTRY]   TXT record query for %s", queryName)
+
 		for _, record := range records {
-			if record.DNSName == strings.TrimSuffix(q.Name, ".") && record.RecordType == endpoint.RecordTypeTXT {
+			if record.DNSName == queryName && record.RecordType == endpoint.RecordTypeTXT {
+				log.Printf("[TEST REGISTRY]   Found matching record: %s -> %v", record.DNSName, record.Targets)
 				for _, target := range record.Targets {
 					rr, err := dns.NewRR(fmt.Sprintf("%s 5 IN TXT %s", q.Name, target))
 					if err != nil {
@@ -136,6 +158,7 @@ func (r *Registry) addDNSAnswer(q dns.Question, msg *dns.Msg, req *dns.Msg) erro
 		}
 
 		if !found {
+			log.Printf("[TEST REGISTRY]   No TXT record found for %s, returning NXDOMAIN", queryName)
 			msg.SetRcode(req, dns.RcodeNameError)
 			return nil
 		}

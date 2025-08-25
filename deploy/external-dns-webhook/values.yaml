@@ -8,7 +8,7 @@
 # The name will need to be referenced in each Issuer's `webhook` stanza to
 # inform cert-manager of where to send ChallengePayload resources in order to
 # solve the DNS01 challenge.
-groupName: external-dns.acme.cert-manager.io
+groupName: cert-manager-webhook.lion7.dev
 
 replicaCount: 1
 

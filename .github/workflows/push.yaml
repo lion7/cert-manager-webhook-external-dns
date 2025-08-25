@@ -1,0 +1,16 @@
+on:
+  push:
+    branches:
+      - 'main'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - uses: azure/setup-helm@v4.3.0
+      - run: go build
+      - run: go vet
+      - run: helm lint ./deploy/external-dns-webhook

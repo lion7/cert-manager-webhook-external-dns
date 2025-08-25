@@ -1,0 +1,15 @@
+apiVersion: v1
+name: external-dns-webhook
+description: external-dns-webhook allows ExternalDNS to be used to satisfy cert-manager ACME DNS-01 challenges
+version: 0.0.0
+appVersion: 0.0.0
+keywords:
+- cert-manager
+- external-dns
+annotations:
+  artifacthub.io/alternativeName: external-dns-webhook
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/category: security
+  artifacthub.io/recommendations: |
+    - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
+    - url: https://artifacthub.io/packages/helm/external-dns/external-dns

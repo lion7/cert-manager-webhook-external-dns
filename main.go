@@ -1,70 +1,54 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-
-	extapi "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/client-go/rest"
+	"hash/fnv"
+	"strings"
+	"time"
 
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/cmd"
+	logf "github.com/cert-manager/cert-manager/pkg/logs"
+	extapi "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/external-dns/endpoint"
+	externaldns "sigs.k8s.io/external-dns/endpoint"
+
+	"github.com/lion7/cert-manager-webhook-external-dns/internal/scheme"
+	contextutil "github.com/lion7/cert-manager-webhook-external-dns/internal/util/context"
 )
 
-var GroupName = os.Getenv("GROUP_NAME")
+var (
+	// ProviderName is the presented name of the provider
+	ProviderName = "external-dns"
+
+	// GroupName is the Kubernetes group name that will be forwarded to this
+	// extension-apiserver.
+	GroupName = "external-dns.acme.cert-manager.io"
+
+	// RequestTimeout is the timeout for each request
+	RequestTimeout = time.Second * 5
+)
 
 func main() {
-	if GroupName == "" {
-		panic("GROUP_NAME must be specified")
-	}
-
-	// This will register our custom DNS provider with the webhook serving
-	// library, making it available as an API under the provided GroupName.
-	// You can register multiple DNS provider implementations with a single
-	// webhook, where the Name() method will be used to disambiguate between
-	// the different implementations.
 	cmd.RunWebhookServer(GroupName,
-		&customDNSProviderSolver{},
+		&externalDNSProviderSolver{},
 	)
 }
 
-// customDNSProviderSolver implements the provider-specific logic needed to
+// externalDNSProviderSolver implements the provider-specific logic needed to
 // 'present' an ACME challenge TXT record for your own DNS provider.
 // To do so, it must implement the `github.com/cert-manager/cert-manager/pkg/acme/webhook.Solver`
 // interface.
-type customDNSProviderSolver struct {
-	// If a Kubernetes 'clientset' is needed, you must:
-	// 1. uncomment the additional `client` field in this structure below
-	// 2. uncomment the "k8s.io/client-go/kubernetes" import at the top of the file
-	// 3. uncomment the relevant code in the Initialize method below
-	// 4. ensure your webhook's service account has the required RBAC role
-	//    assigned to it for interacting with the Kubernetes APIs you need.
-	//client kubernetes.Clientset
-}
-
-// customDNSProviderConfig is a structure that is used to decode into when
-// solving a DNS01 challenge.
-// This information is provided by cert-manager, and may be a reference to
-// additional configuration that's needed to solve the challenge for this
-// particular certificate or issuer.
-// This typically includes references to Secret resources containing DNS
-// provider credentials, in cases where a 'multi-tenant' DNS solver is being
-// created.
-// If you do *not* require per-issuer or per-certificate configuration to be
-// provided to your webhook, you can skip decoding altogether in favour of
-// using CLI flags or similar to provide configuration.
-// You should not include sensitive information here. If credentials need to
-// be used by your provider here, you should reference a Kubernetes Secret
-// resource and fetch these credentials using a Kubernetes clientset.
-type customDNSProviderConfig struct {
-	// Change the two fields below according to the format of the configuration
-	// to be decoded.
-	// These fields will be set by users in the
-	// `issuer.spec.acme.dns01.providers.webhook.config` field.
-
-	//Email           string `json:"email"`
-	//APIKeySecretRef v1alpha1.SecretKeySelector `json:"apiKeySecretRef"`
+type externalDNSProviderSolver struct {
+	client client.Client
+	ctx    context.Context
 }
 
 // Name is used as the name for this DNS solver when referencing it on the ACME
@@ -73,8 +57,8 @@ type customDNSProviderConfig struct {
 // solvers configured with the same Name() **so long as they do not co-exist
 // within a single webhook deployment**.
 // For example, `cloudflare` may be used as the name of a solver.
-func (c *customDNSProviderSolver) Name() string {
-	return "my-custom-solver"
+func (c *externalDNSProviderSolver) Name() string {
+	return ProviderName
 }
 
 // Present is responsible for actually presenting the DNS record with the
@@ -82,16 +66,47 @@ func (c *customDNSProviderSolver) Name() string {
 // This method should tolerate being called multiple times with the same value.
 // cert-manager itself will later perform a self check to ensure that the
 // solver has correctly configured the DNS provider.
-func (c *customDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error {
-	cfg, err := loadConfig(ch.Config)
+func (c *externalDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error {
+	// Create child context that times out
+	ctx, cancel := context.WithTimeout(c.ctx, RequestTimeout)
+	defer cancel()
+
+	// Fail early if the challenge provided contains bad config
+	providerSpecific, err := loadProviderSpecificConfig(ch.Config)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not load provider specific config: %w", err)
 	}
 
-	// TODO: do something more useful with the decoded configuration
-	fmt.Printf("Decoded configuration %v", cfg)
+	// Create the DNSEndpoint object, we just define the metadata here so the
+	// actual update can happen in the controllerutil.CreateOrPatch call below
+	dnsEndpoint := externaldns.DNSEndpoint{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      generateName(ch),
+			Namespace: ch.ResourceNamespace,
+		},
+	}
 
-	// TODO: add code that sets a record in the DNS provider's console
+	result, err := controllerutil.CreateOrPatch(ctx, c.client, &dnsEndpoint, func() error {
+		ep := endpoint.NewEndpoint(ch.ResolvedFQDN, endpoint.RecordTypeTXT, ch.Key).WithSetIdentifier(dnsEndpoint.Name)
+		ep.ProviderSpecific = providerSpecific
+		dnsEndpoint.Spec.Endpoints = []*endpoint.Endpoint{ep}
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("could not create/patch DNSEndpoint object: %w", err)
+	}
+
+	//exhaustive:ignore
+	switch result {
+	case controllerutil.OperationResultCreated:
+		logf.Log.Info("created DNSEndpoint object", "request", ch.UID, "namespace", dnsEndpoint.Namespace, "name", dnsEndpoint.Name)
+	case controllerutil.OperationResultUpdated:
+		logf.Log.Info("updated DNSEndpoint object", "request", ch.UID, "namespace", dnsEndpoint.Namespace, "name", dnsEndpoint.Name)
+	case controllerutil.OperationResultNone:
+		// Object already existed and was up to date
+	}
+
 	return nil
 }
 
@@ -101,8 +116,25 @@ func (c *customDNSProviderSolver) Present(ch *v1alpha1.ChallengeRequest) error {
 // value provided on the ChallengeRequest should be cleaned up.
 // This is in order to facilitate multiple DNS validations for the same domain
 // concurrently.
-func (c *customDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
-	// TODO: add code that deletes a record from the DNS provider's console
+func (c *externalDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
+	// Create child context that times out
+	ctx, cancel := context.WithTimeout(c.ctx, RequestTimeout)
+	defer cancel()
+
+	// Create object with just the namespace and name for the Delete method
+	dnsEndpoint := externaldns.DNSEndpoint{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      generateName(ch),
+			Namespace: ch.ResourceNamespace,
+		},
+	}
+
+	// Delete the object, we do not care if the object does not exist
+	err := c.client.Delete(ctx, &dnsEndpoint)
+	if client.IgnoreNotFound(err) != nil {
+		return fmt.Errorf("could not delete DNSEndpoint object: %w", err)
+	}
+
 	return nil
 }
 
@@ -115,32 +147,49 @@ func (c *customDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
 // provider accounts.
 // The stopCh can be used to handle early termination of the webhook, in cases
 // where a SIGTERM or similar signal is sent to the webhook process.
-func (c *customDNSProviderSolver) Initialize(kubeClientConfig *rest.Config, stopCh <-chan struct{}) error {
-	///// UNCOMMENT THE BELOW CODE TO MAKE A KUBERNETES CLIENTSET AVAILABLE TO
-	///// YOUR CUSTOM DNS PROVIDER
+func (c *externalDNSProviderSolver) Initialize(config *rest.Config, stopCh <-chan struct{}) error {
+	cli, err := client.New(config, client.Options{Scheme: scheme.NewScheme()})
+	if err != nil {
+		return fmt.Errorf("could not create kubernetes client: %w", err)
+	}
 
-	//cl, err := kubernetes.NewForConfig(kubeClientConfig)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//c.client = cl
+	c.client = cli
+	c.ctx = contextutil.StopChannelContext(stopCh)
 
-	///// END OF CODE TO MAKE KUBERNETES CLIENTSET AVAILABLE
 	return nil
 }
 
-// loadConfig is a small helper function that decodes JSON configuration into
-// the typed config struct.
-func loadConfig(cfgJSON *extapi.JSON) (customDNSProviderConfig, error) {
-	cfg := customDNSProviderConfig{}
-	// handle the 'base case' where no configuration has been provided
-	if cfgJSON == nil {
-		return cfg, nil
-	}
-	if err := json.Unmarshal(cfgJSON.Raw, &cfg); err != nil {
-		return cfg, fmt.Errorf("error decoding solver config: %v", err)
+// generateName returns a short, consistent Kubernetes object name for a given
+// challenge
+func generateName(ch *v1alpha1.ChallengeRequest) string {
+	// The the name always starts with the domain name for readability, we
+	// remove any wildcards as they are invalid characters for a Kubernetes
+	// object name. We do not care about collisions in the prefix as a suffix
+	// with a hash is appended.
+	prefix := strings.TrimPrefix(
+		strings.TrimSuffix(ch.DNSName, "."), "*.") + "-"
+
+	// Generate a hash off the key for a consistent suffix
+	hash := fnv.New32()
+	fmt.Fprint(hash, ch.Key)
+	return prefix + rand.SafeEncodeString(fmt.Sprint(hash.Sum32()))
+}
+
+// loadProviderSpecificConfig is a small helper function that decodes JSON
+// configuration into the typed config struct.
+func loadProviderSpecificConfig(cfgJSON *extapi.JSON) (endpoint.ProviderSpecific, error) {
+	type providerSpecificConfig struct {
+		ProviderSpecific endpoint.ProviderSpecific `json:"providerSpecific,omitempty"`
 	}
 
-	return cfg, nil
+	if cfgJSON == nil {
+		return nil, nil
+	}
+
+	var providerSpecific providerSpecificConfig
+	if err := json.Unmarshal(cfgJSON.Raw, &providerSpecific); err != nil {
+		return nil, fmt.Errorf("error decoding solver config: %v", err)
+	}
+
+	return providerSpecific.ProviderSpecific, nil
 }

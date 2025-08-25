@@ -2,48 +2,61 @@
   <img src="https://raw.githubusercontent.com/cert-manager/cert-manager/d53c0b9270f8cd90d908460d69502694e1838f5f/logo/logo-small.png" height="256" width="256" alt="cert-manager project logo" />
 </p>
 
-# ACME webhook example
+# cert-manager - ExternalDNS webhook
 
-The ACME issuer type supports an optional 'webhook' solver, which can be used
-to implement custom DNS01 challenge solving logic.
+This repo allows [cert-manager](https://github.com/cert-manager/cert-manager) to use [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) to handle ACME challenges. 
 
-This is useful if you need to use cert-manager with a DNS provider that is not
-officially supported in cert-manager core.
+## Requirements 
 
-## Why not in core?
+### ExternalDNS
 
-As the project & adoption has grown, there has been an influx of DNS provider
-pull requests to our core codebase. As this number has grown, the test matrix
-has become un-maintainable and so, it's not possible for us to certify that
-providers work to a sufficient level.
+The default configuration of ExternalDNS needs altering for this integration to function:
+- TXT records are not managed by ExternalDNS by default, it requires an extra flag 
+- The DNSEndpoint CRD is not enabled by default 
 
-By creating this 'interface' between cert-manager and DNS providers, we allow
-users to quickly iterate and test out new integrations, and then packaging
-those up themselves as 'extensions' to cert-manager.
+If you are deploying with the [official Helm chart](https://artifacthub.io/packages/helm/external-dns/external-dns) you can accomplish this by including this in your values file:
 
-We can also then provide a standardised 'testing framework', or set of
-conformance tests, which allow us to validate that a DNS provider works as
-expected.
+```yaml
+extraArgs: 
+  - --managed-record-types=A      # ┐
+  - --managed-record-types=AAAA   # ├ Default values
+  - --managed-record-types=CNAME  # ┘
+  - --managed-record-types=TXT    # ─ New value
 
-## Creating your own webhook
+sources:
+  - service # ┬ Default values
+  - ingress # ┘
+  - crd     # ─ New value
+```
 
-Webhook's themselves are deployed as Kubernetes API services, in order to allow
-administrators to restrict access to webhooks with Kubernetes RBAC.
+### cert-manager
 
-This is important, as otherwise it'd be possible for anyone with access to your
-webhook to complete ACME challenge validations and obtain certificates.
+Any supported version of cert-manager supports DNS webhooks, for documentation on installing cert-manager see the [official documentation](https://cert-manager.io/docs/installation/)
 
-To make the set up of these webhook's easier, we provide a template repository
-that can be used to get started quickly.
+## Installing
 
-When implementing your webhook, you should set the `groupName` in the
-[values.yml](deploy/example-webhook/values.yaml) of your chart to a domain name that 
-you - as the webhook-author - own. It should not need to be adjusted by the users of
-your chart.
+TODO
 
-### Creating your own repository
+## Usage
 
-### Running the test suite
+To configure an issuer to use ExternalDNS you just specify the group and solver name within the Issuer or ClusterIssuer config:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: example-issuer
+spec:
+  acme:
+   ...
+    solvers:
+    - dns01:
+        webhook:
+          groupName: external-dns.acme.cert-manager.io
+          solverName: external-dns
+```
+
+## Running the test suite
 
 All DNS providers **must** run the DNS01 provider conformance testing suite,
 else they will have undetermined behaviour when used with cert-manager.
@@ -51,13 +64,12 @@ else they will have undetermined behaviour when used with cert-manager.
 **It is essential that you configure and run the test suite when creating a
 DNS01 webhook.**
 
-An example Go test file has been provided in [main_test.go](https://github.com/cert-manager/webhook-example/blob/master/main_test.go).
+A test file has been provided in [main_test.go](main_test.go).
 
 You can run the test suite with:
 
 ```bash
-$ TEST_ZONE_NAME=example.com. make test
+make test
 ```
 
-The example file has a number of areas you must fill in and replace with your
-own options in order for tests to pass.
+The test suite includes a mock DNS server with external-dns controller simulation to provide comprehensive testing without requiring external DNS provider credentials.

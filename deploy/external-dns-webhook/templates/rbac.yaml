@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ include "external-dns-webhook.name" . }}
+  name: {{ include "external-dns-webhook.fullname" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
     {{- include "external-dns-webhook.labels" . | nindent 4 }}
@@ -23,7 +23,7 @@ roleRef:
 subjects:
   - apiGroup: ""
     kind: ServiceAccount
-    name: {{ include "external-dns-webhook.name" . }}
+    name: {{ include "external-dns-webhook.fullname" . }}
     namespace: {{ .Release.Namespace }}
 ---
 # apiserver gets the auth-delegator role to delegate auth decisions to
@@ -41,7 +41,7 @@ roleRef:
 subjects:
   - apiGroup: ""
     kind: ServiceAccount
-    name: {{ include "external-dns-webhook.name" . }}
+    name: {{ include "external-dns-webhook.fullname" . }}
     namespace: {{ .Release.Namespace }}
 ---
 # Grant cert-manager permission to validate using our apiserver

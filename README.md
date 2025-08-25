@@ -44,10 +44,9 @@ The webhook can be installed using Helm:
 helm repo add cert-manager-webhook-external-dns oci://ghcr.io/lion7/cert-manager-webhook-external-dns
 
 # Install the webhook
-helm install cert-manager-webhook-external-dns \
-  cert-manager-webhook-external-dns/cert-manager-webhook-external-dns \
-  --namespace cert-manager \
-  --create-namespace
+helm install external-dns-webhook \
+  cert-manager-webhook-external-dns/external-dns-webhook \
+  --namespace cert-manager
 ```
 
 ### Using OCI Registry
@@ -55,10 +54,9 @@ helm install cert-manager-webhook-external-dns \
 You can also install directly from the OCI registry:
 
 ```bash
-helm install cert-manager-webhook-external-dns \
-  oci://ghcr.io/lion7/cert-manager-webhook-external-dns \
-  --namespace cert-manager \
-  --create-namespace
+helm install external-dns-webhook \
+  oci://ghcr.io/lion7/cert-manager-webhook-external-dns/external-dns-webhook \
+  --namespace cert-manager
 ```
 
 ### Configuration
@@ -95,10 +93,9 @@ certManager:
 Then install with:
 
 ```bash
-helm install cert-manager-webhook-external-dns \
-  oci://ghcr.io/lion7/cert-manager-webhook-external-dns \
+helm install external-dns-webhook \
+  oci://ghcr.io/lion7/cert-manager-webhook-external-dns/external-dns-webhook \
   --namespace cert-manager \
-  --create-namespace \
   -f values.yaml
 ```
 

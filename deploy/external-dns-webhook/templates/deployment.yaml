@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "external-dns-webhook.name" . }}
+  name: {{ include "external-dns-webhook.fullname" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
     {{- include "external-dns-webhook.labels" . | nindent 4 }}
@@ -31,7 +31,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
     {{- end }}
-      serviceAccountName: {{ include "external-dns-webhook.name" . }}
+      serviceAccountName: {{ include "external-dns-webhook.fullname" . }}
       containers:
       - name: {{ include "external-dns-webhook.name" . }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -88,7 +88,7 @@ spec:
       volumes:
         - name: certs
           secret:
-            secretName: {{ include "external-dns-webhook.name" . }}
+            secretName: {{ include "external-dns-webhook.servingCertificate" . }}
         {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

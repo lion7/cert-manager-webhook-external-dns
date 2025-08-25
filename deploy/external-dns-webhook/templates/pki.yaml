@@ -7,10 +7,7 @@ metadata:
   name: {{ include "external-dns-webhook.selfSignedIssuer" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    app: {{ include "external-dns-webhook.name" . }}
-    chart: {{ include "external-dns-webhook.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "external-dns-webhook.labels" . | nindent 4 }}
 spec:
   selfSigned: {}
 
@@ -23,10 +20,7 @@ metadata:
   name: {{ include "external-dns-webhook.rootCACertificate" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    app: {{ include "external-dns-webhook.name" . }}
-    chart: {{ include "external-dns-webhook.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "external-dns-webhook.labels" . | nindent 4 }}
 spec:
   secretName: {{ include "external-dns-webhook.rootCACertificate" . }}
   duration: 43800h # 5y
@@ -44,10 +38,7 @@ metadata:
   name: {{ include "external-dns-webhook.rootCAIssuer" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    app: {{ include "external-dns-webhook.name" . }}
-    chart: {{ include "external-dns-webhook.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "external-dns-webhook.labels" . | nindent 4 }}
 spec:
   ca:
     secretName: {{ include "external-dns-webhook.rootCACertificate" . }}
@@ -61,10 +52,7 @@ metadata:
   name: {{ include "external-dns-webhook.servingCertificate" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    app: {{ include "external-dns-webhook.name" . }}
-    chart: {{ include "external-dns-webhook.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "external-dns-webhook.labels" . | nindent 4 }}
 spec:
   secretName: {{ include "external-dns-webhook.servingCertificate" . }}
   duration: 8760h # 1y

@@ -9,7 +9,7 @@ spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ include "external-dns-webhook.name" . }}
+      {{- include "external-dns-webhook.selectorLabels" . | nindent 6 }}
   {{- with .Values.strategy }}
   strategy:
     {{- toYaml . | nindent 4 }}
@@ -17,8 +17,6 @@ spec:
   template:
     metadata:
       labels:
-        app: {{ include "external-dns-webhook.name" . }}
-        release: {{ .Release.Name }}
         {{- include "external-dns-webhook.labels" . | nindent 8 }}
       {{- with .Values.podAnnotations }}
       annotations:

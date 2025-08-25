@@ -15,10 +15,7 @@ metadata:
   name: {{ include "external-dns-webhook.fullname" . }}:webhook-authentication-reader
   namespace: kube-system
   labels:
-    app: {{ include "external-dns-webhook.name" . }}
-    chart: {{ include "external-dns-webhook.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "external-dns-webhook.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -36,10 +33,7 @@ kind: ClusterRoleBinding
 metadata:
   name: {{ include "external-dns-webhook.fullname" . }}:auth-delegator
   labels:
-    app: {{ include "external-dns-webhook.name" . }}
-    chart: {{ include "external-dns-webhook.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "external-dns-webhook.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -56,10 +50,7 @@ kind: ClusterRole
 metadata:
   name: {{ include "external-dns-webhook.fullname" . }}:domain-solver
   labels:
-    app: {{ include "external-dns-webhook.name" . }}
-    chart: {{ include "external-dns-webhook.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "external-dns-webhook.labels" . | nindent 4 }}
 rules:
   - apiGroups:
       - {{ .Values.groupName }}
@@ -73,10 +64,7 @@ kind: ClusterRoleBinding
 metadata:
   name: {{ include "external-dns-webhook.fullname" . }}:domain-solver
   labels:
-    app: {{ include "external-dns-webhook.name" . }}
-    chart: {{ include "external-dns-webhook.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "external-dns-webhook.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

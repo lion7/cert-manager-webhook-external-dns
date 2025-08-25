@@ -27,7 +27,7 @@ import (
 // Solver wraps a provided cert-manager webhook solver, adding an extra step to
 // the Initialize method to ensure the external-dns CRDs are installed.
 //
-// It will aso start the external-dns control loop once the underlying Solver
+// It will also start the external-dns control loop once the underlying Solver
 // is initialized.
 type Solver struct {
 	webhook.Solver

@@ -4,10 +4,7 @@ metadata:
   name: {{ include "external-dns-webhook.fullname" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    app: {{ include "external-dns-webhook.name" . }}
-    chart: {{ include "external-dns-webhook.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "external-dns-webhook.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -16,5 +13,4 @@ spec:
       protocol: TCP
       name: https
   selector:
-    app: {{ include "external-dns-webhook.name" . }}
-    release: {{ .Release.Name }}
+    {{- include "external-dns-webhook.selectorLabels" . | nindent 4 }}

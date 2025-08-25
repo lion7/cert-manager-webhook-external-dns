@@ -15,7 +15,7 @@ jobs:
       - run: |
           TAG=${{ github.ref_name }}
           ko build --bare -t $TAG
-          yq -i '.image.tag = "'$TAG'"' deploy/external-dns-webhook/values.yaml
+          sed -i "s|tag: latest|tag: $TAG|" deploy/external-dns-webhook/values.yaml
           helm package ./deploy/external-dns-webhook --version $TAG --app-version $TAG
           helm push ./external-dns-webhook-$TAG.tgz oci://ghcr.io/lion7/cert-manager-webhook-external-dns
           helm template -n cert-manager external-dns-webhook ./external-dns-webhook-$TAG.tgz > recommended.yaml

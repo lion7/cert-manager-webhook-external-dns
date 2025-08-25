@@ -3,10 +3,7 @@ kind: APIService
 metadata:
   name: v1alpha1.{{ .Values.groupName }}
   labels:
-    app: {{ include "external-dns-webhook.name" . }}
-    chart: {{ include "external-dns-webhook.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "external-dns-webhook.labels" . | nindent 4 }}
   annotations:
     cert-manager.io/inject-ca-from: "{{ .Release.Namespace }}/{{ include "external-dns-webhook.servingCertificate" . }}"
 spec:

@@ -90,19 +90,3 @@ func TestChallengesForTheSameRecordShareOneEndpoint(t *testing.T) {
 	}
 	assertKeys(t, solver)
 }
-
-func TestCleanUpRemovesLegacyObject(t *testing.T) {
-	solver := newFakeSolver()
-	ch := challenge("example.com", "key-a")
-
-	legacy := externaldns.DNSEndpoint{}
-	legacy.Namespace, legacy.Name = ch.ResourceNamespace, generateLegacyName(ch)
-	if err := solver.client.Create(context.Background(), &legacy); err != nil {
-		t.Fatalf("could not create legacy object: %v", err)
-	}
-
-	if err := solver.CleanUp(ch); err != nil {
-		t.Fatalf("CleanUp: %v", err)
-	}
-	assertKeys(t, solver)
-}

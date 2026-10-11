@@ -12,7 +12,9 @@ jobs:
           go-version-file: go.mod
       - uses: ko-build/setup-ko@v0.8
       - uses: azure/setup-helm@v4.3.0
-      - run: |
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           TAG=${{ github.ref_name }}
           ko build --bare -t $TAG
           sed -i "s|tag\: latest|tag: $TAG|" deploy/external-dns-webhook/values.yaml

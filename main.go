@@ -170,18 +170,6 @@ func (c *externalDNSProviderSolver) CleanUp(ch *v1alpha1.ChallengeRequest) error
 		return fmt.Errorf("could not clean up DNSEndpoint object: %w", err)
 	}
 
-	// Releases up to 0.0.1 created one object per challenge key, remove the
-	// one a challenge that was presented before the upgrade left behind
-	legacy := externaldns.DNSEndpoint{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      generateLegacyName(ch),
-			Namespace: ch.ResourceNamespace,
-		},
-	}
-	if err := c.client.Delete(ctx, &legacy); client.IgnoreNotFound(err) != nil {
-		return fmt.Errorf("could not delete DNSEndpoint object: %w", err)
-	}
-
 	return nil
 }
 
@@ -211,11 +199,6 @@ func (c *externalDNSProviderSolver) Initialize(config *rest.Config, stopCh <-cha
 // its wildcard) get the same name, so they end up in one DNSEndpoint.
 func generateName(ch *v1alpha1.ChallengeRequest) string {
 	return namePrefix(ch) + hashString(strings.ToLower(strings.TrimSuffix(ch.ResolvedFQDN, ".")))
-}
-
-// generateLegacyName returns the per-key object name used up to release 0.0.1
-func generateLegacyName(ch *v1alpha1.ChallengeRequest) string {
-	return namePrefix(ch) + hashString(ch.Key)
 }
 
 // namePrefix returns the domain name for readability, we remove any wildcards

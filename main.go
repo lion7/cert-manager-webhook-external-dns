@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cert-manager/cert-manager/pkg/acme/webhook"
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/cmd"
 	logf "github.com/cert-manager/cert-manager/pkg/logs"
@@ -46,12 +47,15 @@ func main() {
 
 // externalDNSProviderSolver implements the provider-specific logic needed to
 // 'present' an ACME challenge TXT record for your own DNS provider.
-// To do so, it must implement the `github.com/cert-manager/cert-manager/pkg/acme/webhook.Solver`
-// interface.
+//
+// It must implement the [webhook.Solver] interface:
+// https://pkg.go.dev/github.com/cert-manager/cert-manager/pkg/acme/webhook#Solver
 type externalDNSProviderSolver struct {
 	client client.Client
 	ctx    context.Context
 }
+
+var _ webhook.Solver = (*externalDNSProviderSolver)(nil)
 
 // Name is used as the name for this DNS solver when referencing it on the ACME
 // Issuer resource.
